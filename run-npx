@@ -1,0 +1,1 @@
+ npx @modelcontextprotocol/inspector --config mcp.json --server default-server
