@@ -7,38 +7,41 @@ use crate::{
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ZipInfo {
-    pub zip_file: String,
-    pub image: String,
-    pub index: usize,
+pub struct PhotoInfo {
+    /// Zip file name in the filesystem
+    pub zip_file_name: String,
+    /// Image file name inside the zip file
+    pub photo_file_name: String,
+    /// Image index inside the zip file, useful for extraction
+    pub photo_index_in_zip: usize,
 }
 
-impl ZipInfo {
+impl PhotoInfo {
     pub fn new(zip_file: String, image: String, index: usize) -> Self {
-        ZipInfo {
-            zip_file,
-            image,
-            index,
+        PhotoInfo {
+            zip_file_name: zip_file,
+            photo_file_name: image,
+            photo_index_in_zip: index,
         }
     }
 }
 
 // year => month => zip_file => image_file => exif_info
-pub type ByYearMonth = HashMap<u32, HashMap<u32, Vec<ZipInfo>>>;
+pub type ByYearMonth = HashMap<u32, HashMap<u32, Vec<PhotoInfo>>>;
 
 // zip_file => image_file => exif_info
-pub type ExifCache = HashMap<ZipInfo, exif::ExifInfo>;
+pub type ExifCache = HashMap<PhotoInfo, exif::ExifInfo>;
 pub type ExifCacheSerialized = HashMap<String, exif::ExifInfo>;
 
-pub struct ImageCache {
+pub struct PhotoCache {
     image_dir: String,
     // Map image file name to zip file name
-    pub images: Vec<ZipInfo>,
+    pub images: Vec<PhotoInfo>,
     pub exif_cache: ExifCache,
     pub by_year_month: ByYearMonth,
 }
 
-impl ImageCache {
+impl PhotoCache {
     pub fn build(image_dir: &str) -> Result<Self, PhotoInsightError> {
         let mut exif_cache: ExifCache = HashMap::new();
         let mut by_year_month: ByYearMonth = HashMap::new();
@@ -48,7 +51,7 @@ impl ImageCache {
             let images = zip::list_zip_archive(image_dir, zip)?;
             tracing::info!("Found zip file: {} with {} images", zip, images.len());
             for (index, image) in &images {
-                zip_infos.insert(ZipInfo::new(zip.clone(), image.clone(), *index));
+                zip_infos.insert(PhotoInfo::new(zip.clone(), image.clone(), *index));
             }
 
             // Extract and cache exif data
@@ -58,7 +61,7 @@ impl ImageCache {
                     zip
                 );
 
-                let extract_exif_raw: HashMap<ZipInfo, exif::ExifInfo> =
+                let extract_exif_raw: HashMap<PhotoInfo, exif::ExifInfo> =
                     crate::core::exif::extract_all_exifs_from_zip_archive(image_dir, zip)?;
                 let exif_count = extract_exif_raw.len();
                 tracing::info!("Extracted exif from {} images in zip {}", exif_count, zip);
@@ -70,7 +73,9 @@ impl ImageCache {
                         (
                             format!(
                                 "{}|{}|{}",
-                                zip_info.zip_file, zip_info.image, zip_info.index
+                                zip_info.zip_file_name,
+                                zip_info.photo_file_name,
+                                zip_info.photo_index_in_zip
                             ),
                             exif,
                         )
@@ -104,7 +109,7 @@ impl ImageCache {
                         let zip_file = parts[0].to_string();
                         let image = parts[1].to_string();
                         let index = parts[2].parse::<usize>().ok()?;
-                        Some((ZipInfo::new(zip_file, image, index), exif))
+                        Some((PhotoInfo::new(zip_file, image, index), exif))
                     } else {
                         None
                     }
@@ -153,7 +158,7 @@ impl ImageCache {
 
             // merge partial_by_year_month into by_year_month
             for (year, month_map) in partial_by_year_month {
-                let mut updates: Vec<(u32, u32, Vec<ZipInfo>)> = Vec::new();
+                let mut updates: Vec<(u32, u32, Vec<PhotoInfo>)> = Vec::new();
                 for (month, infos) in month_map {
                     updates.push((year, month, infos));
                 }
@@ -175,6 +180,16 @@ impl ImageCache {
         })
     }
 
+    // List all images in the cache
+    pub fn list_all_images(&self, offset: usize, limit: usize) -> (Vec<&PhotoInfo>, usize) {
+        let total_images = self.images.len();
+        tracing::info!("Total images in cache: {}", total_images);
+        let start = offset.min(total_images);
+        let end = (offset + limit).min(total_images);
+        tracing::info!("Returning images from {} to {}", start, end);
+        (self.images[start..end].iter().collect(), total_images)
+    }
+
     // Search for image by partial name (case insensitive)
     // returns vector exif info and thumbnail image data
     pub fn search_image_by_name(
@@ -182,12 +197,16 @@ impl ImageCache {
         image_name: &str,
         offset: usize,
         limit: usize,
-    ) -> (Vec<&ZipInfo>, usize) {
+    ) -> (Vec<&PhotoInfo>, usize) {
         let image_name_lower = image_name.to_lowercase();
-        let zip_infos: Vec<&ZipInfo> = self
+        let zip_infos: Vec<&PhotoInfo> = self
             .images
             .iter()
-            .filter(|info| info.image.to_lowercase().contains(&image_name_lower))
+            .filter(|info| {
+                info.photo_file_name
+                    .to_lowercase()
+                    .contains(&image_name_lower)
+            })
             .collect();
         let total_found = zip_infos.len();
         tracing::info!("Found {} matching images", total_found);
@@ -204,7 +223,7 @@ impl ImageCache {
         month: u32,
         offset: usize,
         limit: usize,
-    ) -> (Vec<&ZipInfo>, usize) {
+    ) -> (Vec<&PhotoInfo>, usize) {
         let r = IC.by_year_month.get(&year);
         if r.is_none() {
             return (Vec::new(), 0);
@@ -215,14 +234,14 @@ impl ImageCache {
             return (Vec::new(), 0);
         }
 
-        let zip_infos: &Vec<ZipInfo> = r.unwrap();
+        let zip_infos: &Vec<PhotoInfo> = r.unwrap();
         let total_found = zip_infos.len();
         tracing::info!("Found {} matching images", total_found);
         let start = offset.min(zip_infos.len());
         let end = (offset + limit).min(zip_infos.len());
         tracing::info!("Returning images from {} to {}", start, end);
 
-        let slice = zip_infos[start..end].iter().collect::<Vec<&ZipInfo>>();
+        let slice = zip_infos[start..end].iter().collect::<Vec<&PhotoInfo>>();
 
         (slice, total_found)
     }
@@ -234,7 +253,7 @@ impl ImageCache {
         operator: &String,
         offset: usize,
         limit: usize,
-    ) -> Result<(Vec<(ZipInfo, exif::ExifInfo)>, usize), PhotoInsightError> {
+    ) -> Result<(Vec<(PhotoInfo, exif::ExifInfo)>, usize), PhotoInsightError> {
         tracing::info!("search image by EXIF tag : offset: {offset} Limiting results to {limit}");
         let mut results = Vec::new();
         IC.exif_cache.iter().for_each(|(zip_info, exif)| {
@@ -261,8 +280,8 @@ impl ImageCache {
 
     pub fn exif_info(
         &self,
-        image_infos: Vec<&ZipInfo>,
-    ) -> Result<Vec<(ZipInfo, exif::ExifInfo)>, PhotoInsightError> {
+        image_infos: Vec<&PhotoInfo>,
+    ) -> Result<Vec<(PhotoInfo, exif::ExifInfo)>, PhotoInsightError> {
         let mut exif_infos = Vec::new();
         for img in image_infos {
             if let Some(exif) = self.exif_cache.get(img) {
@@ -274,12 +293,12 @@ impl ImageCache {
 
     pub fn image_data(
         &self,
-        image_infos: Vec<&ZipInfo>,
+        image_infos: Vec<&PhotoInfo>,
     ) -> Result<Vec<(String, String, Vec<u8>)>, PhotoInsightError> {
         let mut arxives = HashMap::new();
         for info in image_infos {
-            let arxive = info.zip_file.clone();
-            let index = info.index;
+            let arxive = info.zip_file_name.clone();
+            let index = info.photo_index_in_zip;
             arxives.entry(arxive).or_insert_with(Vec::new).push(index);
         }
         let mut images = Vec::new();

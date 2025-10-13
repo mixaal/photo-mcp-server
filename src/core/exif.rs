@@ -4,7 +4,7 @@ use std::{collections::HashMap, io::Read, path::Path};
 
 use lazy_static::lazy_static;
 
-use crate::core::{error::PhotoInsightError, image_cache::ZipInfo, zip::is_image_file};
+use crate::core::{error::PhotoInsightError, image_cache::PhotoInfo, zip::is_image_file};
 
 lazy_static! {
     static ref RE: Regex = Regex::new(r"^.?(\d\d\d\d)-(\d\d)").unwrap();
@@ -141,7 +141,7 @@ impl ExifInfo {
 pub fn extract_all_exifs_from_zip_archive(
     image_dir: &str,
     zip_file_name: &str,
-) -> Result<HashMap<ZipInfo, ExifInfo>, PhotoInsightError> {
+) -> Result<HashMap<PhotoInfo, ExifInfo>, PhotoInsightError> {
     let zip_path = Path::new(image_dir).join(zip_file_name);
     let mut files = HashMap::new();
 
@@ -168,7 +168,7 @@ pub fn extract_all_exifs_from_zip_archive(
                     continue;
                 }
                 files.insert(
-                    ZipInfo::new(zip_file_name.to_owned(), file_name, i),
+                    PhotoInfo::new(zip_file_name.to_owned(), file_name, i),
                     exif.unwrap().0,
                 );
             }

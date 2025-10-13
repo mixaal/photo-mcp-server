@@ -22,9 +22,9 @@ pub async fn start_server() -> SdkResult<()> {
     let server_details = InitializeResult {
         // server name and version
         server_info: Implementation {
-            name: "Hello World MCP Server SSE".to_string(),
+            name: "PhotoTool  MCP Server SSE".to_string(),
             version: "0.1.0".to_string(),
-            title: Some("Hello World MCP Server SSE".to_string()),
+            title: Some("PhotoTool Organizer, Insight helper".to_string()),
         },
         capabilities: ServerCapabilities {
             // indicates that server support mcp tools
@@ -32,7 +32,19 @@ pub async fn start_server() -> SdkResult<()> {
             ..Default::default() // Using default values for other fields
         },
         meta: None,
-        instructions: Some("server instructions...".to_string()),
+        instructions: Some(
+            vec![
+                "This server provides help on deeper understanding of the photo collection we have in our zip files.",
+                "It provides methods for listing of photos, describing exif tags of photos, searching of photos by name, exif tags or by year and month.",
+                "Most responses contain pagination to help browse on results (next_offset, next_limit). If next_offset is not present or null, there are no more pages.",
+                "Image file description contains zip_file - that is the file on the file system, image_file - \
+the file inside the zip archive and image_index_in_zip which describes the \
+archive index number in the zip (for fast extraction).",
+                "There are also helpers on viewing photos that send the ImageContent (base64 \
+encoded). Those methods do not have pagination but offset and limit can be used and derived from non-view methods.",
+            ]
+            .join("\n"),
+        ),
         protocol_version: LATEST_PROTOCOL_VERSION.to_string(),
     };
 

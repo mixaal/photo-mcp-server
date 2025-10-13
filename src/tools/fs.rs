@@ -85,5 +85,5 @@ impl ListFileSystemTool {
         )]))
     }
 }
-
-tool_box!(FsTools, [ListFileSystemTool, ListImagesTool]);
+// we don't need this
+// tool_box!(FsTools, [ListFileSystemTool, ListImagesTool]);

@@ -8,8 +8,8 @@ lazy_static! {
         env::var("IMAGE_DIR").unwrap_or_else(|_| format!("{}/Pictures", env::var("HOME").unwrap()));
 
     // Initialize a global instance of ImageCache using the specified image directory
-    pub static ref IC: core::image_cache::ImageCache =
-        core::image_cache::ImageCache::build(IMAGE_DIR.as_str()).unwrap();
+    pub static ref IC: core::image_cache::PhotoCache =
+        core::image_cache::PhotoCache::build(IMAGE_DIR.as_str()).unwrap();
 }
 pub mod handler;
 pub mod server;
