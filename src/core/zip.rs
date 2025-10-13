@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::core::error::PhotoInsightError;
+use crate::core::{error::PhotoInsightError, image_cache::PhotoInfo};
 use std::io::Read;
 
 /// Extracts file_number from a zip archive into memory.
@@ -9,7 +9,7 @@ pub fn extract_zip_archive(
     image_dir: &str,
     zip_file_name: &str,
     file_number: Vec<usize>,
-) -> Result<Vec<(String, Vec<u8>)>, PhotoInsightError> {
+) -> Result<Vec<(PhotoInfo, Vec<u8>)>, PhotoInsightError> {
     let zip_path = Path::new(image_dir).join(zip_file_name);
 
     let mut result = Vec::new();
@@ -33,7 +33,10 @@ pub fn extract_zip_archive(
             let mut buf = Vec::new();
             file.read_to_end(&mut buf)
                 .map_err(|e| PhotoInsightError::new(e))?;
-            result.push((file_name, buf));
+            result.push((
+                PhotoInfo::new(zip_file_name.to_owned(), file_name, *idx),
+                buf,
+            ));
         }
 
         Ok(result)

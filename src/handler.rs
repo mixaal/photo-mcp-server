@@ -68,6 +68,7 @@ impl ServerHandler for PhotoInsightServerHandler {
             PhotoTools::PhotoExifTagTool(tool) => tool.call_tool(),
             PhotoTools::PhotoExifSearchTagTool(tool) => tool.call_tool(),
             PhotoTools::ListAllPhotosTool(tool) => tool.call_tool(),
+            PhotoTools::PhotoObjectDetectionTool(tool) => tool.call_tool(),
         };
         // } else {
         //     let tool_params = tool_params.unwrap();

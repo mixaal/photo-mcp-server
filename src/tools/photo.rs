@@ -10,6 +10,7 @@ use crate::IC;
 const MAX_PHOTO_VIEW_SEARCH_LIMIT: u32 = 50;
 const MAX_PHOTO_FILES_SEARCH_LIMIT: u32 = 10000;
 const MAX_PHOTO_EXIF_SEARCH_LIMIT: u32 = 1000;
+const MAX_PHOTO_YOLO_ANALYZE_LIMIT: u32 = 50;
 
 #[mcp_tool(
     name = "list_all_photos",
@@ -36,7 +37,7 @@ impl ListAllPhotosTool {
         let next_limit = limit;
 
         let json_info = serde_json::json!({
-            "photos": { "files" : infos },
+            "result": infos,
             "pagination": {
                 "offset": offset,
                 "limit": limit,
@@ -61,7 +62,7 @@ pub struct PhotoExifTagTool {}
 impl PhotoExifTagTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
         let json_info = serde_json::json!({
-            "tags": [
+            "result": [
                 {"name": "width", "type": "Integer", "allowed_operators": ["==", ">", "<", ">=", "<=", "!="]},
                 {"name": "height", "type": "Integer", "allowed_operators": ["==", ">", "<", ">=", "<=", "!="]},
                 {"name": "month", "type": "Integer", "allowed_operators": ["==", ">", "<", ">=", "<=", "!="]},
@@ -105,14 +106,13 @@ impl PhotoExifSearchTagTool {
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_EXIF_SEARCH_LIMIT) as usize;
         tracing::info!("search image by EXIF tag : offset: {offset} Limiting results to {limit}");
-        let (infos, total) = IC
+        let (exifs, total) = IC
             .search_image_by_exif_tags(&self.tag, &self.value, &self.operator, offset, limit)
             .map_err(|e| {
                 CallToolError::from_message(format!("Failed to search images by EXIF tag: {}", e))
             })?;
-        let next_offset = offset + infos.len();
+        let next_offset = offset + exifs.len();
         let next_limit = limit;
-        let (files, exifs) = infos.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
 
         let json_info = serde_json::json!({
             "query":{
@@ -120,7 +120,7 @@ impl PhotoExifSearchTagTool {
                 "value": self.value,
                 "operator": self.operator,
             },
-            "photos": { "files" : files, "exifs": exifs },
+            "result": exifs,
             "pagination": {
                 "offset": offset,
                 "limit": limit,
@@ -162,7 +162,7 @@ impl PhotoSearchByNameTool {
         let next_limit = limit;
         let json_info = serde_json::json!({
             "query": {"file" : self.file_name },
-            "photos": { "files" : infos },
+            "result": infos,
             "pagination": {
                 "offset": offset,
                 "limit": limit,
@@ -208,7 +208,7 @@ impl PhotoSearchByYearMonthTool {
                 "year": self.year,
                 "month": self.month,
             },
-            "photos": { "files" : infos },
+            "result":  infos,
             "pagination": {
                 "offset": offset,
                 "limit": limit,
@@ -345,19 +345,68 @@ impl PhotoExifTool {
         tracing::info!("Limiting results to {}", limit);
         let (infos, total) = IC.search_image_by_name(&self.file_name, 0, limit);
         let info_len = infos.len();
-        let infos = IC.exif_info(infos).map_err(|e| {
+        let exifs = IC.exif_info(infos).map_err(|e| {
             CallToolError::from_message(format!("Failed to extract EXIF info: {}", e))
         })?;
 
         let next_offset = offset + info_len;
         let next_limit = limit;
-        let (files, exifs) = infos.into_iter().unzip::<_, _, Vec<_>, Vec<_>>();
 
         let json_info = serde_json::json!({
-         "query":{
+            "query":{
                 "file_name": self.file_name,
             },
-            "photos": { "files" : files, "exifs": exifs },
+            "result": exifs,
+            "pagination": {
+                "offset": offset,
+                "limit": limit,
+                "total": total,
+                "next_offset": if next_offset < total { Some(next_offset) } else { None },
+                "next_limit": next_limit,
+            },
+        });
+
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            json_info.to_string(),
+        )]))
+    }
+}
+
+#[mcp_tool(
+    name = "photo_object_detection",
+    description = "Accepts photo file name and returns object detections using YOLOv8 (returns vector of images provided, each contains vector of detected objects)"
+)]
+#[derive(Debug, ::serde::Deserialize, ::serde::Serialize, JsonSchema)]
+pub struct PhotoObjectDetectionTool {
+    /// Photo file name. Can be partial, e.g. "IMG_1234" will match "IMG_1234.jpg", "IMG_1234 (1).jpg", etc.
+    /// Example: "IMG_1234.jpg"
+    file_name: String,
+    /// Offset into results
+    /// Example: 0
+    offset: u32,
+    /// Limit number of results returned
+    /// Example: 5
+    limit: u32,
+}
+
+impl PhotoObjectDetectionTool {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        let offset = self.offset as usize;
+        let limit = self.limit.min(MAX_PHOTO_YOLO_ANALYZE_LIMIT) as usize;
+        tracing::info!("Limiting results to {}", limit);
+        let (infos, total) = IC.search_image_by_name(&self.file_name, 0, limit);
+        let info_len = infos.len();
+        let object_detections = IC.yolo_v8_analysis(infos).map_err(|e| {
+            CallToolError::from_message(format!("Failed to analyze images using YOLOv8: {}", e))
+        })?;
+
+        let next_offset = offset + info_len;
+        let next_limit = limit;
+        let json_info = serde_json::json!({
+            "query":{
+                "file_name": self.file_name,
+            },
+            "result": object_detections,
             "pagination": {
                 "offset": offset,
                 "limit": limit,
@@ -383,6 +432,7 @@ tool_box!(
         PhotoSearchByNameTool,
         PhotoSearchByYearMonthTool,
         PhotoExifTagTool,
-        PhotoExifSearchTagTool
+        PhotoExifSearchTagTool,
+        PhotoObjectDetectionTool
     ]
 );

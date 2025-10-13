@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     IC,
-    core::{error::PhotoInsightError, exif, traversal, zip},
+    core::{error::PhotoInsightError, exif, traversal, yolo::AnalysisResult, zip},
 };
 use std::collections::{HashMap, HashSet};
 
@@ -23,6 +23,18 @@ impl PhotoInfo {
             photo_file_name: image,
             photo_index_in_zip: index,
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExifResult {
+    file: PhotoInfo,
+    exif: exif::ExifInfo,
+}
+
+impl ExifResult {
+    fn new(file: PhotoInfo, exif: exif::ExifInfo) -> Self {
+        Self { file, exif }
     }
 }
 
@@ -253,7 +265,7 @@ impl PhotoCache {
         operator: &String,
         offset: usize,
         limit: usize,
-    ) -> Result<(Vec<(PhotoInfo, exif::ExifInfo)>, usize), PhotoInsightError> {
+    ) -> Result<(Vec<ExifResult>, usize), PhotoInsightError> {
         tracing::info!("search image by EXIF tag : offset: {offset} Limiting results to {limit}");
         let mut results = Vec::new();
         IC.exif_cache.iter().for_each(|(zip_info, exif)| {
@@ -263,7 +275,7 @@ impl PhotoCache {
                 .unwrap_or(false);
 
             if matched {
-                results.push((zip_info.clone(), exif.clone()));
+                results.push(ExifResult::new(zip_info.clone(), exif.clone()));
             }
         });
 
@@ -281,11 +293,11 @@ impl PhotoCache {
     pub fn exif_info(
         &self,
         image_infos: Vec<&PhotoInfo>,
-    ) -> Result<Vec<(PhotoInfo, exif::ExifInfo)>, PhotoInsightError> {
+    ) -> Result<Vec<ExifResult>, PhotoInsightError> {
         let mut exif_infos = Vec::new();
         for img in image_infos {
             if let Some(exif) = self.exif_cache.get(img) {
-                exif_infos.push((img.clone(), exif.clone()));
+                exif_infos.push(ExifResult::new(img.clone(), exif.clone()));
             }
         }
         Ok(exif_infos)
@@ -294,7 +306,7 @@ impl PhotoCache {
     pub fn image_data(
         &self,
         image_infos: Vec<&PhotoInfo>,
-    ) -> Result<Vec<(String, String, Vec<u8>)>, PhotoInsightError> {
+    ) -> Result<Vec<(PhotoInfo, String, Vec<u8>)>, PhotoInsightError> {
         let mut arxives = HashMap::new();
         for info in image_infos {
             let arxive = info.zip_file_name.clone();
@@ -304,27 +316,46 @@ impl PhotoCache {
         let mut images = Vec::new();
         for (zip_file, indices) in arxives {
             let unpacked = zip::extract_zip_archive(&self.image_dir, &zip_file, indices)?;
-            for (file_name, image_data) in unpacked {
+            for (photo_info, image_data) in unpacked {
                 let exif = crate::core::exif::extract_exif_info(&image_data, true);
                 if exif.is_err() {
                     tracing::warn!(
-                        "Failed to extract exif from image {} in zip {}: {}",
-                        file_name,
+                        "Failed to extract exif from image {:?} in zip {}: {}",
+                        photo_info,
                         zip_file,
                         exif.err().unwrap()
                     );
                     // let mime = mime_from_image(&image_data);
                     let resized_image = exif::resize(&image_data, 0, 0);
                     let mime = mime_from_image(&resized_image);
-                    images.push((file_name, mime, resized_image));
+                    images.push((photo_info, mime, resized_image));
                 } else {
                     let image_data = exif.unwrap().1;
                     let mime = mime_from_image(&image_data);
-                    images.push((file_name, mime, image_data));
+                    images.push((photo_info, mime, image_data));
                 }
             }
         }
         Ok(images)
+    }
+
+    pub fn yolo_v8_analysis(
+        &self,
+        image_infos: Vec<&PhotoInfo>,
+    ) -> Result<Vec<AnalysisResult>, PhotoInsightError> {
+        let mut arxives = HashMap::new();
+        for info in image_infos {
+            let arxive = info.zip_file_name.clone();
+            let index = info.photo_index_in_zip;
+            arxives.entry(arxive).or_insert_with(Vec::new).push(index);
+        }
+        let mut analysis_results = Vec::new();
+        for (zip_file, indices) in arxives {
+            let unpacked = zip::extract_zip_archive(&self.image_dir, &zip_file, indices)?;
+            let yolo_results = crate::core::yolo::analyze_images_using_yolo(unpacked)?;
+            analysis_results.extend(yolo_results);
+        }
+        Ok(analysis_results)
     }
 }
 
