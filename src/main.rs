@@ -12,10 +12,7 @@ async fn main() -> SdkResult<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // let infos = image_cache.search_image("20210125_134310-upraveno.jpg");
-    let infos = IC.search_image_by_name("Michal, Edita/20210125_134310-upraveno.jpg", 0, 20);
-
-    tracing::info!("Search results: {:#?}", infos);
+    let _ = IC.search_image_by_name(&".".to_owned(), &None, 0, 20);
 
     server::start_server().await?;
 

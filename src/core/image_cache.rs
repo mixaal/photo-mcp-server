@@ -206,18 +206,29 @@ impl PhotoCache {
     // returns vector exif info and thumbnail image data
     pub fn search_image_by_name(
         &self,
-        image_name: &str,
+        file_name: &String,
+        zip_file_name: &Option<String>,
         offset: usize,
         limit: usize,
     ) -> (Vec<&PhotoInfo>, usize) {
-        let image_name_lower = image_name.to_lowercase();
+        let image_name_lower = file_name.to_lowercase();
         let zip_infos: Vec<&PhotoInfo> = self
             .images
             .iter()
             .filter(|info| {
-                info.photo_file_name
+                let file_condition = info
+                    .photo_file_name
                     .to_lowercase()
-                    .contains(&image_name_lower)
+                    .contains(&image_name_lower);
+                if let Some(zip_file) = &zip_file_name {
+                    file_condition
+                        && info
+                            .zip_file_name
+                            .to_lowercase()
+                            .contains(&zip_file.to_lowercase())
+                } else {
+                    file_condition
+                }
             })
             .collect();
         let total_found = zip_infos.len();

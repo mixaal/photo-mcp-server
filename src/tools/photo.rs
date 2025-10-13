@@ -145,6 +145,9 @@ pub struct PhotoSearchByNameTool {
     /// Photo file name. Can be partial, e.g. "IMG_1234" will match "IMG_1234.jpg", "IMG_1234 (1).jpg", etc.
     /// Example: "IMG_1234.jpg"
     file_name: String,
+    /// Optionally you can provide zip file name to restrict the search on a given zip file
+    /// Example: takeout-20230906T142745Z-050.zip
+    zip_file_name: Option<String>,
     /// Offset into results
     /// Example: 0
     offset: u32,
@@ -157,7 +160,8 @@ impl PhotoSearchByNameTool {
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_FILES_SEARCH_LIMIT) as usize;
         tracing::info!("search image by name : offset: {offset} Limiting results to {limit}");
-        let (infos, total) = IC.search_image_by_name(&self.file_name, offset, limit);
+        let (infos, total) =
+            IC.search_image_by_name(&self.file_name, &self.zip_file_name, offset, limit);
         let next_offset = offset + infos.len();
         let next_limit = limit;
         let json_info = serde_json::json!({
@@ -233,6 +237,9 @@ pub struct PhotoViewByNameTool {
     /// Photo file name. Can be partial, e.g. "IMG_1234" will match "IMG_1234.jpg", "IMG_1234 (1).jpg", etc.
     /// Example: "IMG_1234.jpg"
     file_name: String,
+    /// Optionally you can provide zip file name to restrict the search on a given zip file
+    /// Example: takeout-20230906T142745Z-050.zip
+    zip_file_name: Option<String>,
     /// Offset into results
     /// Example: 0
     offset: u32,
@@ -246,7 +253,8 @@ impl PhotoViewByNameTool {
         let limit = self.limit.min(MAX_PHOTO_VIEW_SEARCH_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);
         let offset = self.offset as usize;
-        let (infos, _) = IC.search_image_by_name(&self.file_name, offset, limit);
+        let (infos, _) =
+            IC.search_image_by_name(&self.file_name, &self.zip_file_name, offset, limit);
         let image_data = IC
             .image_data(infos)
             .map_err(|e| {
@@ -330,6 +338,9 @@ pub struct PhotoExifTool {
     /// Photo file name. Can be partial, e.g. "IMG_1234" will match "IMG_1234.jpg", "IMG_1234 (1).jpg", etc.
     /// Example: "IMG_1234.jpg"
     file_name: String,
+    /// Optionally you can provide zip file name to restrict the search on a given zip file
+    /// Example: takeout-20230906T142745Z-050.zip
+    zip_file_name: Option<String>,
     /// Offset into results
     /// Example: 0
     offset: u32,
@@ -343,7 +354,8 @@ impl PhotoExifTool {
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_EXIF_SEARCH_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);
-        let (infos, total) = IC.search_image_by_name(&self.file_name, 0, limit);
+        let (infos, total) =
+            IC.search_image_by_name(&self.file_name, &self.zip_file_name, offset, limit);
         let info_len = infos.len();
         let exifs = IC.exif_info(infos).map_err(|e| {
             CallToolError::from_message(format!("Failed to extract EXIF info: {}", e))
@@ -381,6 +393,9 @@ pub struct PhotoObjectDetectionTool {
     /// Photo file name. Can be partial, e.g. "IMG_1234" will match "IMG_1234.jpg", "IMG_1234 (1).jpg", etc.
     /// Example: "IMG_1234.jpg"
     file_name: String,
+    /// Optionally you can provide zip file name to restrict the search on a given zip file
+    /// Example: takeout-20230906T142745Z-050.zip
+    zip_file_name: Option<String>,
     /// Offset into results
     /// Example: 0
     offset: u32,
@@ -394,7 +409,8 @@ impl PhotoObjectDetectionTool {
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_YOLO_ANALYZE_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);
-        let (infos, total) = IC.search_image_by_name(&self.file_name, 0, limit);
+        let (infos, total) =
+            IC.search_image_by_name(&self.file_name, &self.zip_file_name, offset, limit);
         let info_len = infos.len();
         let object_detections = IC.yolo_v8_analysis(infos).map_err(|e| {
             CallToolError::from_message(format!("Failed to analyze images using YOLOv8: {}", e))
