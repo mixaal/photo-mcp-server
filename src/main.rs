@@ -12,6 +12,8 @@ async fn main() -> SdkResult<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    rustls::crypto::ring::default_provider().install_default();
+
     let _ = IC.search_image_by_name(&".".to_owned(), &None, 0, 20);
 
     server::start_server().await?;

@@ -1,1 +1,2 @@
+ export NODE_EXTRA_CA_CERTS=certs/.certs/ca.crt
  npx @modelcontextprotocol/inspector --config mcp.json --server default-server

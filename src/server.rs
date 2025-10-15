@@ -56,7 +56,11 @@ encoded). Those methods do not have pagination but offset and limit can be used 
         server_details,
         handler,
         HyperServerOptions {
-            host: "127.0.0.1".to_string(),
+            enable_ssl: true,
+            ssl_cert_path: Some("certs/server.crt".to_owned()),
+            ssl_key_path: Some("certs/server.key".to_owned()),
+            sse_support: false,
+            host: "0.0.0.0".to_string(),
             ping_interval: Duration::from_secs(5),
             event_store: Some(Arc::new(InMemoryEventStore::default())), // enable resumability
             ..Default::default()

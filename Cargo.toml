@@ -17,6 +17,7 @@ regex = "1.11.3"
 
 
 rust-mcp-sdk = "0.7.0"
+rustls = "0.23.32"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tokio = { version = "1.47.1", features = ["full"] }

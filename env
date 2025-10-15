@@ -1,0 +1,7 @@
+YOLO_HOME="$HOME/git/YOLOv8-rs"
+export YOLO_V8_MODEL_PATH="$YOLO_HOME/models"
+export LIBTORCH_LIB="$YOLO_HOME/libtorch/"
+export LD_LIBRARY_PATH=$LIBTORCH_LIB/lib
+export LIBTORCH="$YOLO_HOME/libtorch/"
+export IMAGE_DIR="$HOME/Fotky/"
+
