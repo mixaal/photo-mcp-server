@@ -2,9 +2,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     IC,
-    core::{error::PhotoInsightError, exif, traversal, yolo::AnalysisResult, zip},
+    core::{
+        error::PhotoInsightError,
+        exif, traversal,
+        yolo::{AnalysisResult, DetectedObject},
+        zip,
+    },
 };
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    time::Instant,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PhotoInfo {
@@ -24,6 +33,29 @@ impl PhotoInfo {
             photo_index_in_zip: index,
         }
     }
+
+    fn serialize_as_key(&self) -> String {
+        format!(
+            "{}|{}|{}",
+            self.zip_file_name, self.photo_file_name, self.photo_index_in_zip
+        )
+    }
+
+    fn deserialize_from_key(key: String) -> Result<Self, PhotoInsightError> {
+        let parts: Vec<&str> = key.split('|').collect();
+        if parts.len() == 3 {
+            let zip_file = parts[0].to_string();
+            let image = parts[1].to_string();
+            let index = parts[2]
+                .parse::<usize>()
+                .map_err(|e| PhotoInsightError::new(e))?;
+            Ok(PhotoInfo::new(zip_file, image, index))
+        } else {
+            Err(PhotoInsightError::from_message(format!(
+                "cannot deserialize PhotoInfo from {key}"
+            )))
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,12 +70,15 @@ impl ExifResult {
     }
 }
 
-// year => month => zip_file => image_file => exif_info
+// year => month => photo_info(s)
 pub type ByYearMonth = HashMap<u32, HashMap<u32, Vec<PhotoInfo>>>;
 
-// zip_file => image_file => exif_info
+// photo_info => exif_info
 pub type ExifCache = HashMap<PhotoInfo, exif::ExifInfo>;
 pub type ExifCacheSerialized = HashMap<String, exif::ExifInfo>;
+
+// photo_info => object_detecion
+pub type ObjectDetectionCache = HashMap<PhotoInfo, Vec<DetectedObject>>;
 
 pub struct PhotoCache {
     image_dir: String,
@@ -51,6 +86,7 @@ pub struct PhotoCache {
     pub images: Vec<PhotoInfo>,
     pub exif_cache: ExifCache,
     pub by_year_month: ByYearMonth,
+    pub object_detection: Option<ObjectDetectionCache>,
 }
 
 impl PhotoCache {
@@ -81,17 +117,7 @@ impl PhotoCache {
                 // Convert ZipInfo to String for serialization
                 let extract_exif: ExifCacheSerialized = extract_exif_raw
                     .into_iter()
-                    .map(|(zip_info, exif)| {
-                        (
-                            format!(
-                                "{}|{}|{}",
-                                zip_info.zip_file_name,
-                                zip_info.photo_file_name,
-                                zip_info.photo_index_in_zip
-                            ),
-                            exif,
-                        )
-                    })
+                    .map(|(zip_info, exif)| (zip_info.serialize_as_key(), exif))
                     .collect();
 
                 serde_json::to_writer_pretty(
@@ -116,12 +142,8 @@ impl PhotoCache {
             let extract_exif: ExifCache = extract_exif_serialized
                 .into_iter()
                 .filter_map(|(key, exif)| {
-                    let parts: Vec<&str> = key.split('|').collect();
-                    if parts.len() == 3 {
-                        let zip_file = parts[0].to_string();
-                        let image = parts[1].to_string();
-                        let index = parts[2].parse::<usize>().ok()?;
-                        Some((PhotoInfo::new(zip_file, image, index), exif))
+                    if let Some(photo_info) = PhotoInfo::deserialize_from_key(key).ok() {
+                        Some((photo_info, exif))
                     } else {
                         None
                     }
@@ -189,6 +211,7 @@ impl PhotoCache {
             image_dir: image_dir.to_string(),
             exif_cache,
             by_year_month,
+            object_detection: None,
         })
     }
 
@@ -200,6 +223,65 @@ impl PhotoCache {
         let end = (offset + limit).min(total_images);
         tracing::info!("Returning images from {} to {}", start, end);
         (self.images[start..end].iter().collect(), total_images)
+    }
+
+    // Crawl images and perform AI analysis
+    pub fn crawl_and_analyse(&self) {
+        let mut by_zip_archive = HashMap::new();
+        for info in self.images.iter() {
+            by_zip_archive
+                .entry(info.zip_file_name.clone())
+                .or_insert(Vec::new())
+                .push(info);
+        }
+        for (archive, photos) in by_zip_archive.iter() {
+            let result_file_name = form_file(&self.image_dir, &archive, "object_detection");
+            if Path::new(&result_file_name).exists() {
+                tracing::info!("Already found {result_file_name}, skipping creation");
+                continue;
+            }
+            let mut per_archive_object_detection = HashMap::new();
+            tracing::info!("Analysis of  photo archive {archive} to perform object detection");
+            let archive_start = Instant::now();
+            for photo_chunks in photos.chunks(100) {
+                tracing::info!(
+                    "Performing object detecion on  photo chunk with {} items",
+                    photo_chunks.len()
+                );
+                let chunk_start = Instant::now();
+                let r = self.yolo_v8_analysis(photo_chunks.to_vec());
+                let elapsed = chunk_start.elapsed();
+                if let Ok(image_detections) = r {
+                    for image_detection in image_detections {
+                        per_archive_object_detection.insert(
+                            image_detection.photo_info.serialize_as_key(),
+                            image_detection.object_detection,
+                        );
+                    }
+                } else {
+                    tracing::error!("object detection error: {:?}", r.err().unwrap());
+                }
+                tracing::info!("Analysis of chunk finished in {elapsed:?}");
+            }
+            tracing::info!(
+                "Processing of archive {archive} finished in {:?}",
+                archive_start.elapsed()
+            );
+            let writer_attempt = std::fs::File::create(result_file_name);
+            if let Ok(writer) = writer_attempt {
+                if let Err(e) = serde_json::to_writer_pretty(writer, &per_archive_object_detection)
+                {
+                    tracing::error!(
+                        "can't serialize object detection results for {archive} due to error {e:?}"
+                    );
+                }
+            } else {
+                tracing::error!(
+                    "can't serialize object detection results for {archive} due to error {:?}",
+                    writer_attempt.err()
+                );
+            }
+        }
     }
 
     // Search for image by partial name (case insensitive)

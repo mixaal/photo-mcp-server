@@ -11,8 +11,8 @@ pub struct DetectedObject {
 
 #[derive(Debug, Serialize)]
 pub struct AnalysisResult {
-    photo_info: PhotoInfo,
-    object_detection: Vec<DetectedObject>,
+    pub(crate) photo_info: PhotoInfo,
+    pub(crate) object_detection: Vec<DetectedObject>,
 }
 
 impl AnalysisResult {
@@ -34,7 +34,7 @@ pub fn analyze_images_using_yolo(
     use std::io::Write;
     use yolo_v8::YoloV8ObjectDetection;
 
-    let yolo = YoloV8ObjectDetection::new();
+    let yolo = YoloV8ObjectDetection::new().map_err(|e| PhotoInsightError::new(e))?;
 
     let mut results = Vec::new();
     for (photo_info, image_data) in images {
@@ -58,7 +58,8 @@ pub fn analyze_images_using_yolo(
         // Get the file name as a string
         let temp_file_name = temp_path.to_string_lossy().to_string();
         let image =
-            yolo_v8::image::Image::new(&temp_file_name, YoloV8ObjectDetection::input_dimension());
+            yolo_v8::image::Image::new(&temp_file_name, YoloV8ObjectDetection::input_dimension())
+                .map_err(|e| PhotoInsightError::new(e))?;
         let detections = yolo.predict(&image, 0.25, 0.7).postprocess().0;
         let result: Vec<DetectedObject> = detections
             .into_iter()

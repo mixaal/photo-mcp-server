@@ -3,13 +3,12 @@ use crate::resources::photo::PhotoResource;
 use crate::tools::photo::PhotoTools;
 use async_trait::async_trait;
 use rust_mcp_sdk::schema::{
-    BlobResourceContents, ListResourceTemplatesRequest, ListResourceTemplatesResult,
-    ReadResourceRequest, ReadResourceResult, ReadResourceResultContentsItem, ResourceTemplate,
-    TextResourceContents,
-};
-use rust_mcp_sdk::schema::{
     CallToolRequest, CallToolResult, ListToolsRequest, ListToolsResult, RpcError,
     schema_utils::CallToolError,
+};
+use rust_mcp_sdk::schema::{
+    ListResourceTemplatesRequest, ListResourceTemplatesResult, ReadResourceRequest,
+    ReadResourceResult, ReadResourceResultContentsItem,
 };
 use rust_mcp_sdk::{McpServer, mcp_server::ServerHandler};
 use std::sync::Arc;
