@@ -12,5 +12,6 @@ lazy_static! {
         core::image_cache::PhotoCache::build(IMAGE_DIR.as_str()).unwrap();
 }
 pub mod handler;
+pub mod resources;
 pub mod server;
 pub mod tools;

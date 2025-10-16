@@ -377,37 +377,23 @@ fn form_file(image_dir: &str, zip_file: &str, suffix: &str) -> String {
 fn mime_from_image(image_data: &Vec<u8>) -> String {
     match crate::core::image::guess_format(image_data) {
         Ok(format) => match format {
-            crate::core::image::ImageFormat::Png => "image/png;base64".to_string(),
-            crate::core::image::ImageFormat::Jpeg => "image/jpeg;base64".to_string(),
-            crate::core::image::ImageFormat::Gif => "image/gif;base64".to_string(),
-            crate::core::image::ImageFormat::Bmp => "image/bmp;base64".to_string(),
-            crate::core::image::ImageFormat::Tiff => "image/tiff;base64".to_string(),
-            crate::core::image::ImageFormat::WebP => "image/webp;base64".to_string(),
-            crate::core::image::ImageFormat::Pnm => "image/pnm;base64".to_string(),
-            crate::core::image::ImageFormat::Tga => "image/tga;base64".to_string(),
-            crate::core::image::ImageFormat::Dds => "image/dds;base64".to_string(),
-            crate::core::image::ImageFormat::Ico => "image/ico;base64".to_string(),
-            crate::core::image::ImageFormat::Hdr => "image/hdr;base64".to_string(),
-            crate::core::image::ImageFormat::OpenExr => "image/openexr;base64".to_string(),
-            crate::core::image::ImageFormat::Farbfeld => "image/farbfeld;base64".to_string(),
-            crate::core::image::ImageFormat::Avif => "image/avif;base64".to_string(),
-            crate::core::image::ImageFormat::Qoi => "image/qoi;base64".to_string(),
-            crate::core::image::ImageFormat::Pcx => "image/pcx;base64".to_string(),
+            crate::core::image::ImageFormat::Png => "image/png".to_string(),
+            crate::core::image::ImageFormat::Jpeg => "image/jpeg".to_string(),
+            crate::core::image::ImageFormat::Gif => "image/gif".to_string(),
+            crate::core::image::ImageFormat::Bmp => "image/bmp".to_string(),
+            crate::core::image::ImageFormat::Tiff => "image/tiff".to_string(),
+            crate::core::image::ImageFormat::WebP => "image/webp".to_string(),
+            crate::core::image::ImageFormat::Pnm => "image/pnm".to_string(),
+            crate::core::image::ImageFormat::Tga => "image/tga".to_string(),
+            crate::core::image::ImageFormat::Dds => "image/dds".to_string(),
+            crate::core::image::ImageFormat::Ico => "image/ico".to_string(),
+            crate::core::image::ImageFormat::Hdr => "image/hdr".to_string(),
+            crate::core::image::ImageFormat::OpenExr => "image/openexr".to_string(),
+            crate::core::image::ImageFormat::Farbfeld => "image/farbfeld".to_string(),
+            crate::core::image::ImageFormat::Avif => "image/avif".to_string(),
+            crate::core::image::ImageFormat::Qoi => "image/qoi".to_string(),
+            crate::core::image::ImageFormat::Pcx => "image/pcx".to_string(),
         },
-        Err(_) => "application/octet-stream;base64".to_string(),
+        Err(_) => "application/octet-stream".to_string(),
     }
-    // let ext = std::path::Path::new(file_name)
-    //     .extension()
-    //     .and_then(std::ffi::OsStr::to_str)
-    //     .unwrap_or("")
-    //     .to_lowercase();
-    // match ext.to_lowercase().as_str() {
-    //     "jpg" | "jpeg" => "image/jpeg;base64".to_string(),
-    //     "png" => "image/png;base64".to_string(),
-    //     "gif" => "image/gif;base64".to_string(),
-    //     "bmp" => "image/bmp;base64".to_string(),
-    //     "tiff" => "image/tiff;base64".to_string(),
-    //     "webp" => "image/webp;base64".to_string(),
-    //     _ => "application/octet-stream;base64".to_string(),
-    // }
 }

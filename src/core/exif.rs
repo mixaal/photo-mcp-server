@@ -275,8 +275,8 @@ pub fn extract_exif_info(
         false,
     );
 
-    let maker_notes = extract_tag(&exif, vec![exif::Tag::MakerNote], false);
-    println!("maker_notes={maker_notes}");
+    // let maker_notes = extract_tag(&exif, vec![exif::Tag::MakerNote], false);
+    // println!("maker_notes={maker_notes}");
 
     // println!("model={}", model.replace("\"", "").replace(",", ""));
 

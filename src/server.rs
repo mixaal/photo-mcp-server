@@ -7,7 +7,7 @@ use rust_mcp_sdk::mcp_server::{HyperServerOptions, hyper_server};
 use crate::handler::PhotoInsightServerHandler;
 use rust_mcp_sdk::schema::{
     Implementation, InitializeResult, LATEST_PROTOCOL_VERSION, ServerCapabilities,
-    ServerCapabilitiesTools,
+    ServerCapabilitiesResources, ServerCapabilitiesTools,
 };
 
 use rust_mcp_sdk::{error::SdkResult, mcp_server::ServerHandler};
@@ -27,6 +27,7 @@ pub async fn start_server() -> SdkResult<()> {
             title: Some("PhotoTool Organizer, Insight helper".to_string()),
         },
         capabilities: ServerCapabilities {
+            resources: Some(ServerCapabilitiesResources { list_changed: None, subscribe: Some(false) }),
             // indicates that server support mcp tools
             tools: Some(ServerCapabilitiesTools { list_changed: None }),
             ..Default::default() // Using default values for other fields

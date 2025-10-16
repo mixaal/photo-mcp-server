@@ -61,6 +61,7 @@ impl ListAllPhotosTool {
 pub struct PhotoExifTagTool {}
 impl PhotoExifTagTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!("photo_exif_tags (list supported exif tags");
         let json_info = serde_json::json!({
             "result": [
                 {"name": "width", "type": "Integer", "allowed_operators": ["==", ">", "<", ">=", "<=", "!="]},
@@ -103,9 +104,17 @@ pub struct PhotoExifSearchTagTool {
 }
 impl PhotoExifSearchTagTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "search_exif_tags: offset={} {} {} {} operator={}",
+            self.offset,
+            self.limit,
+            self.tag,
+            self.operator,
+            self.value,
+        );
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_EXIF_SEARCH_LIMIT) as usize;
-        tracing::info!("search image by EXIF tag : offset: {offset} Limiting results to {limit}");
+        tracing::info!("search image by EXIF tag : Limiting results to {limit}");
         let (exifs, total) = IC
             .search_image_by_exif_tags(&self.tag, &self.value, &self.operator, offset, limit)
             .map_err(|e| {
@@ -157,9 +166,16 @@ pub struct PhotoSearchByNameTool {
 }
 impl PhotoSearchByNameTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "search image by name: {} {:?} offset={} limit={}",
+            self.file_name,
+            self.zip_file_name,
+            self.offset,
+            self.limit
+        );
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_FILES_SEARCH_LIMIT) as usize;
-        tracing::info!("search image by name : offset: {offset} Limiting results to {limit}");
+        tracing::info!("search image by name :  Limiting results to {limit}");
         let (infos, total) =
             IC.search_image_by_name(&self.file_name, &self.zip_file_name, offset, limit);
         let next_offset = offset + infos.len();
@@ -201,9 +217,16 @@ pub struct PhotoSearchByYearMonthTool {
 }
 impl PhotoSearchByYearMonthTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "photo search by year = {}, month={}, offset={}, limit={}",
+            self.year,
+            self.month,
+            self.offset,
+            self.limit
+        );
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_FILES_SEARCH_LIMIT) as usize;
-        tracing::info!("search image by name : offset: {offset} Limiting results to {limit}");
+        tracing::info!("search image by name : Limiting results to {limit}");
         let (infos, total) = IC.search_image_by_year_month(self.year, self.month, offset, limit);
         let next_offset = offset + infos.len();
         let next_limit = limit;
@@ -351,6 +374,13 @@ pub struct PhotoExifTool {
 
 impl PhotoExifTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "exif tool: file_name={}, zip_file_name={:?}, offset={}, limit={}",
+            self.file_name,
+            self.zip_file_name,
+            self.offset,
+            self.limit
+        );
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_EXIF_SEARCH_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);
@@ -406,6 +436,13 @@ pub struct PhotoObjectDetectionTool {
 
 impl PhotoObjectDetectionTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "photo object detection tool: file_name={}, zip_file_name={:?}, offset={}, limit={}",
+            self.file_name,
+            self.zip_file_name,
+            self.offset,
+            self.limit
+        );
         let offset = self.offset as usize;
         let limit = self.limit.min(MAX_PHOTO_YOLO_ANALYZE_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);

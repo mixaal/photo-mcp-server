@@ -1,6 +1,12 @@
+use crate::resources::photo::PhotoResource;
 // use crate::tools::fs::FsTools;
 use crate::tools::photo::PhotoTools;
 use async_trait::async_trait;
+use rust_mcp_sdk::schema::{
+    BlobResourceContents, ListResourceTemplatesRequest, ListResourceTemplatesResult,
+    ReadResourceRequest, ReadResourceResult, ReadResourceResultContentsItem, ResourceTemplate,
+    TextResourceContents,
+};
 use rust_mcp_sdk::schema::{
     CallToolRequest, CallToolResult, ListToolsRequest, ListToolsResult, RpcError,
     schema_utils::CallToolError,
@@ -79,5 +85,55 @@ impl ServerHandler for PhotoInsightServerHandler {
         //         FsTools::ListImagesTool(tool) => tool.call_tool(),
         //     }
         // }
+    }
+
+    /// List available resource templates
+    async fn handle_list_resource_templates_request(
+        &self,
+        request: ListResourceTemplatesRequest,
+        runtime: Arc<dyn McpServer>,
+    ) -> Result<ListResourceTemplatesResult, RpcError> {
+        Ok(ListResourceTemplatesResult {
+            meta: None,
+            next_cursor: None,
+            resource_templates: vec![PhotoResource::get()],
+        })
+    }
+
+    /// Handle Resource Request
+    async fn handle_read_resource_request(
+        &self,
+        request: ReadResourceRequest,
+        runtime: Arc<dyn McpServer>,
+    ) -> Result<ReadResourceResult, RpcError> {
+        println!("request: {request:#?}");
+        let uri = request.params.uri;
+        let splitted = uri.split("###").collect::<Vec<&str>>();
+        if splitted.len() != 4 {
+            tracing::error!("invalid params: uri={uri} splitted={splitted:#?}");
+            return Err(RpcError::invalid_params());
+        }
+        let (zip_file, image_file, offset, limit) = (
+            splitted[0].to_owned(),
+            splitted[1].to_owned(),
+            splitted[2],
+            splitted[3],
+        );
+        let offset = offset
+            .parse::<usize>()
+            .map_err(|e| RpcError::invalid_params().with_message(e.to_string()))?;
+        let limit = limit
+            .parse::<usize>()
+            .map_err(|e| RpcError::invalid_params().with_message(e.to_string()))?;
+        let blobs = PhotoResource::read_resource(zip_file, image_file, offset, limit)
+            .map_err(|e| RpcError::internal_error().with_message(e.message))?;
+        let contents = blobs
+            .iter()
+            .map(|b| ReadResourceResultContentsItem::BlobResourceContents(b.clone()))
+            .collect();
+        Ok(ReadResourceResult {
+            meta: None,
+            contents,
+        })
     }
 }
