@@ -275,6 +275,9 @@ pub fn extract_exif_info(
         false,
     );
 
+    let maker_notes = extract_tag(&exif, vec![exif::Tag::MakerNote], false);
+    println!("maker_notes={maker_notes}");
+
     // println!("model={}", model.replace("\"", "").replace(",", ""));
 
     Ok((
@@ -383,4 +386,16 @@ pub(crate) fn resize(buf: &Vec<u8>, orig_w: u32, orig_h: u32) -> Vec<u8> {
     sc_img.save("/tmp/x.jpg").expect("resize save failed");
     let result = std::fs::read("/tmp/x.jpg").expect("read resized file");
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::exif::extract_exif_info;
+
+    #[test]
+    fn test_exif_info() {
+        let img = std::fs::read("test/images/40d.jpg").expect("image not found");
+        let exif = extract_exif_info(&img, false).expect("can't extract exif");
+        println!("{exif:#?}");
+    }
 }

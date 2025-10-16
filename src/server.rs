@@ -51,10 +51,12 @@ encoded). Those methods do not have pagination but offset and limit can be used 
     // STEP 2: instantiate our custom handler for handling MCP messages
     let handler = PhotoInsightServerHandler::new();
 
-    // STEP 3: instantiate HyperServer, providing `server_details` , `handler` and HyperServerOptions
-    let server = hyper_server::create_server(
-        server_details,
-        handler,
+    let ssl_enabled = std::env::var("SSL_ENABLED")
+        .unwrap_or_default()
+        .to_lowercase()
+        == "true";
+    let servier_options = if ssl_enabled {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         HyperServerOptions {
             enable_ssl: true,
             ssl_cert_path: Some("certs/server.crt".to_owned()),
@@ -64,8 +66,19 @@ encoded). Those methods do not have pagination but offset and limit can be used 
             ping_interval: Duration::from_secs(5),
             event_store: Some(Arc::new(InMemoryEventStore::default())), // enable resumability
             ..Default::default()
-        },
-    );
+        }
+    } else {
+        HyperServerOptions {
+            sse_support: false,
+            host: "0.0.0.0".to_string(),
+            ping_interval: Duration::from_secs(5),
+            event_store: Some(Arc::new(InMemoryEventStore::default())), // enable resumability
+            ..Default::default()
+        }
+    };
+
+    // STEP 3: instantiate HyperServer, providing `server_details` , `handler` and HyperServerOptions
+    let server = hyper_server::create_server(server_details, handler, servier_options);
 
     // tracing::info!("{}", server.server_info(None).await?);
 
