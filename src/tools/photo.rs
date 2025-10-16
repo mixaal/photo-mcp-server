@@ -1,11 +1,15 @@
+use std::collections::HashMap;
+
 use rust_mcp_sdk::schema::ImageContent;
 use rust_mcp_sdk::schema::{CallToolResult, TextContent, schema_utils::CallToolError};
 use rust_mcp_sdk::{
     macros::{JsonSchema, mcp_tool},
     tool_box,
 };
+use serde::Serialize;
 
 use crate::IC;
+use crate::core::exif::ExifInfo;
 
 const MAX_PHOTO_VIEW_SEARCH_LIMIT: u32 = 50;
 const MAX_PHOTO_FILES_SEARCH_LIMIT: u32 = 10000;
@@ -273,6 +277,13 @@ pub struct PhotoViewByNameTool {
 
 impl PhotoViewByNameTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "photo view by name: name={}, zip={:?}, offset={}m limit={}",
+            self.file_name,
+            self.zip_file_name,
+            self.offset,
+            self.limit
+        );
         let limit = self.limit.min(MAX_PHOTO_VIEW_SEARCH_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);
         let offset = self.offset as usize;
@@ -323,6 +334,13 @@ pub struct PhotoViewByYearMonthTool {
 
 impl PhotoViewByYearMonthTool {
     pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!(
+            "photo view by name: year={}, month={:?}, offset={}m limit={}",
+            self.year,
+            self.month,
+            self.offset,
+            self.limit
+        );
         let limit = self.limit.min(MAX_PHOTO_VIEW_SEARCH_LIMIT) as usize;
         tracing::info!("Limiting results to {}", limit);
         let offset = self.offset as usize;
@@ -475,6 +493,144 @@ impl PhotoObjectDetectionTool {
     }
 }
 
+#[mcp_tool(
+    name = "photo_stats_summary",
+    description = "Returns global summary statistics"
+)]
+#[derive(Debug, ::serde::Deserialize, ::serde::Serialize, JsonSchema)]
+pub struct PhotoGlobalSummaryTool {}
+
+impl PhotoGlobalSummaryTool {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        tracing::info!("photo global stats");
+
+        let mut years_range = vec![];
+        let mut all_years = IC
+            .by_year_month
+            .keys()
+            .filter(|year| **year > 0) // in case we don't know the year, we assign 0
+            .cloned()
+            .collect::<Vec<u32>>();
+        all_years.sort();
+        let l = all_years.len();
+        if all_years.len() > 0 {
+            years_range.push(all_years[0]);
+            years_range.push(all_years[l - 1]);
+        }
+
+        let exifs = IC.exif_cache.values().cloned().collect::<Vec<ExifInfo>>();
+        let mut camera_model_counts = HashMap::new();
+        let mut lens_model_counts = HashMap::new();
+        for exif in exifs.iter() {
+            *camera_model_counts.entry(exif.model.as_str()).or_insert(0) += 1;
+            *lens_model_counts.entry(exif.lens.as_str()).or_insert(0) += 1;
+        }
+        let total = IC.images.len();
+
+        let json_info = serde_json::json!({
+            "camera_model_photo_count": camera_model_counts,
+            "lens_model_photo_count": lens_model_counts,
+            "years_range": years_range,
+            "total_photos": total
+        }
+        );
+
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            json_info.to_string(),
+        )]))
+    }
+}
+
+#[mcp_tool(
+    name = "photo_stats_by_year",
+    description = "Returns summary statistics based on year/month search (year aggregation API)"
+)]
+#[derive(Debug, ::serde::Deserialize, ::serde::Serialize, JsonSchema)]
+pub struct PhotoStatsByYearTool {
+    /// Start year for statistics
+    /// Example: 2004
+    year_start: u32,
+    /// End year for statistics
+    /// Example: 2025
+    year_end: u32,
+}
+impl PhotoStatsByYearTool {
+    pub fn call_tool(&self) -> Result<CallToolResult, CallToolError> {
+        #[derive(Serialize)]
+        struct YearAggregation {
+            count: usize,
+            months: HashMap<u32, MonthSummary>,
+        }
+        #[derive(Serialize)]
+        struct MonthSummary {
+            count: usize,
+            camera: HashMap<String, usize>,
+            lens: HashMap<String, usize>,
+        }
+        tracing::info!(
+            "photo stats by year: start_year={:?}, end_year={:?}",
+            self.year_start,
+            self.year_end,
+        );
+
+        let year_start = self.year_start;
+        let year_end = self.year_end;
+        let years_selected = IC
+            .by_year_month
+            .keys()
+            .filter(|year| **year >= year_start && **year <= year_end && **year > 0)
+            .cloned()
+            .collect::<Vec<u32>>();
+
+        let mut year_aggregation = HashMap::new();
+
+        for (year, by_month) in IC.by_year_month.iter() {
+            if years_selected.contains(year) {
+                let mut count = 0;
+                let mut month_agg = HashMap::new();
+                for (month, infos) in by_month.iter() {
+                    let number_of_photos = infos.len();
+                    let mut camera = HashMap::new();
+                    let mut lens = HashMap::new();
+                    for photo_info in infos {
+                        if let Some(exif) = IC.exif_cache.get(photo_info) {
+                            *camera.entry(exif.model.clone()).or_insert(0) += 1;
+                            *lens.entry(exif.lens.clone()).or_insert(0) += 1;
+                        }
+                    }
+                    month_agg.insert(
+                        *month,
+                        MonthSummary {
+                            count: number_of_photos,
+                            camera,
+                            lens,
+                        },
+                    );
+                    count += number_of_photos;
+                }
+                let yagg = YearAggregation {
+                    count,
+                    months: month_agg,
+                };
+
+                year_aggregation.insert(*year, yagg);
+            }
+        }
+
+        let total = IC.images.len();
+
+        let json_info = serde_json::json!({
+            "years": year_aggregation,
+            "total": total
+        }
+        );
+
+        Ok(CallToolResult::text_content(vec![TextContent::from(
+            json_info.to_string(),
+        )]))
+    }
+}
+
 tool_box!(
     PhotoTools,
     [
@@ -486,6 +642,8 @@ tool_box!(
         PhotoSearchByYearMonthTool,
         PhotoExifTagTool,
         PhotoExifSearchTagTool,
-        PhotoObjectDetectionTool
+        PhotoObjectDetectionTool,
+        PhotoGlobalSummaryTool,
+        PhotoStatsByYearTool,
     ]
 );
