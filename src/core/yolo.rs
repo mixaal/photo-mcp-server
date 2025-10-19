@@ -27,39 +27,17 @@ impl AnalysisResult {
 pub fn analyze_images_using_yolo(
     images: Vec<(PhotoInfo, Vec<u8>)>,
 ) -> Result<Vec<AnalysisResult>, PhotoInsightError> {
-    use rand::Rng;
-    use rand::distr::Alphanumeric;
-    use std::env;
-    use std::fs::File;
-    use std::io::Write;
     use yolo_v8::YoloV8ObjectDetection;
 
     let yolo = YoloV8ObjectDetection::new().map_err(|e| PhotoInsightError::new(e))?;
 
     let mut results = Vec::new();
     for (photo_info, image_data) in images {
-        // Create a temporary file path
-        let mut temp_path = env::temp_dir();
-        let rand_str: String = rand::rng()
-            .sample_iter(&Alphanumeric)
-            .take(12)
-            .map(char::from)
-            .collect();
-        temp_path.push(format!("{}_yolo_tmp.jpg", rand_str));
-
-        // Write image_data to the temporary file
-        let mut temp_file = File::create(&temp_path).map_err(|e| {
-            PhotoInsightError::from_message(format!("Failed to create temp file: {}", e))
-        })?;
-        temp_file.write_all(&image_data).map_err(|e| {
-            PhotoInsightError::from_message(format!("Failed to write image data: {}", e))
-        })?;
-
-        // Get the file name as a string
-        let temp_file_name = temp_path.to_string_lossy().to_string();
-        let image =
-            yolo_v8::image::Image::new(&temp_file_name, YoloV8ObjectDetection::input_dimension())
-                .map_err(|e| PhotoInsightError::new(e))?;
+        let image = yolo_v8::image::Image::load_from_memory(
+            &image_data,
+            YoloV8ObjectDetection::input_dimension(),
+        )
+        .map_err(|e| PhotoInsightError::new(e))?;
         let detections = yolo.predict(&image, 0.25, 0.7).postprocess().0;
         let result: Vec<DetectedObject> = detections
             .into_iter()
